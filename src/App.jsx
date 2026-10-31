@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { api } from "./api.js";
 
 const SESSION_KEY = "runners-session";
@@ -211,12 +213,60 @@ function Lobby({ room, me, code, error, onError }) {
 }
 
 // Game view: location sharing, tagging, calls and tips.
+function currentRadius(room, now) {
+  const z = room.zone;
+  if (!z.growPerStepM || room.startedAt == null) return z.radiusM;
+  const steps = Math.floor((now - room.startedAt) / (z.stepMinutes * 60 * 1000));
+  return z.radiusM + steps * z.growPerStepM;
+}
+
+function MapView({ center, radiusM, points }) {
+  const ref = useRef(null);
+  const mapRef = useRef(null);
+  const layerRef = useRef(null);
+
+  useEffect(() => {
+    const map = L.map(ref.current).setView([center.lat, center.lng], 16);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+      maxZoom: 19,
+    }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    return () => map.remove();
+  }, []);
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    L.circle([center.lat, center.lng], { radius: radiusM, color: "#2b6cb0", weight: 2, fillOpacity: 0.05 }).addTo(layer);
+    points.forEach((p) => {
+      L.circleMarker([p.lat, p.lng], { radius: 8, color: p.color || "#c53030" }).bindTooltip(p.label).addTo(layer);
+    });
+  }, [center, radiusM, points]);
+
+  return <div ref={ref} className="map" />;
+}
+
 function Game({ room, me, code, onError }) {
   const mine = room.players[me];
   const isSeeker = mine.role === "seeker";
   const runners = Object.values(room.players).filter((p) => p.role === "runner");
   const seekers = Object.values(room.players).filter((p) => p.role === "seeker");
   const [pos, setPos] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const headStartLeft = room.seekersFreeAt ? Math.max(0, room.seekersFreeAt - now) : 0;
+  const fmt = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
+  const mapPoints = Object.values(room.players)
+    .filter((p) => p.pos && p.id !== me)
+    .map((p) => ({ lat: p.pos.lat, lng: p.pos.lng, label: p.name, color: p.role === "runner" ? "#c53030" : "#2f855a" }));
+  const myPos = room.players[me]?.pos;
+  if (myPos) mapPoints.push({ lat: myPos.lat, lng: myPos.lng, label: "Du", color: "#2b6cb0" });
 
   // Send own position: immediately, then every 5 minutes for runners and every 15 s for seekers.
   useEffect(() => {
@@ -260,6 +310,13 @@ function Game({ room, me, code, onError }) {
     <section className="card">
       <h2>{isSeeker ? "Sucher" : "Verstecker"} – {mine.name}</h2>
       <p>Status: {mine.status === "ok" ? "aktiv" : mine.status === "lost" ? "verloren" : "getickt"}</p>
+      {isSeeker && headStartLeft > 0 && <p className="hint">Vorsprung der Verstecker: noch {fmt(headStartLeft)}</p>}
+      <MapView center={room.zone.center} radiusM={currentRadius(room, now)} points={mapPoints} />
+      <p className="hint">Karte zeigt den letzten gemeldeten Standort.</p>
+
+      {!isSeeker && mine.status === "ok" && (
+        <TipAnswers room={room} me={me} code={code} act={act} />
+      )}
 
       {!isSeeker && mine.status === "ok" && (
         <button className="danger" onClick={() => act(() => api.confirmTagged(code, me))}>
@@ -285,6 +342,11 @@ function Game({ room, me, code, onError }) {
                   <a href={r.phone ? `tel:${r.phone}` : undefined} className={canContact && r.phone ? "" : "disabled"} onClick={() => act(() => api.contact(code, me, r.id, "call"))}>Anrufen ({mine.calls}/{room.limits.calls})</a>
                   <a href={r.phone ? `facetime:${r.phone}` : undefined} className={canContact && r.phone ? "" : "disabled"} onClick={() => act(() => api.contact(code, me, r.id, "facetime"))}>FaceTime ({mine.facetimes}/{room.limits.facetimes})</a>
                   <TipButtons room={room} me={me} runnerId={r.id} code={code} tipsUsed={mine.tips} act={act} />
+                  {room.tips.filter((t) => t.seekerId === me && t.targetId === r.id).map((t) => (
+                    <p key={t.id} className="hint">
+                      {TIP_LABELS[t.tipIndex]}: {t.answer || "noch keine Antwort"}
+                    </p>
+                  ))}
                 </li>
               );
             })}
@@ -313,6 +375,34 @@ const TIP_LABELS = [
   "In welche Richtung bist du gerade gelaufen?",
   "Bist du versteckt oder stehst du offen?",
 ];
+
+function TipAnswers({ room, me, code, act }) {
+  const open = room.tips.filter((t) => t.targetId === me && !t.answer);
+  const [drafts, setDrafts] = useState({});
+  if (open.length === 0) return null;
+  return (
+    <section>
+      <h3>Fragen der Sucher</h3>
+      {open.map((t) => (
+        <div key={t.id} className="tip">
+          <p>{TIP_LABELS[t.tipIndex]}</p>
+          <input
+            value={drafts[t.id] || ""}
+            maxLength={200}
+            onChange={(e) => setDrafts({ ...drafts, [t.id]: e.target.value })}
+            placeholder="Deine Antwort"
+          />
+          <button
+            disabled={!(drafts[t.id] || "").trim()}
+            onClick={() => act(() => api.tipAnswer(code, me, t.id, drafts[t.id]))}
+          >
+            Antworten
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+}
 
 function TipButtons({ room, me, runnerId, code, tipsUsed, act }) {
   const [choice, setChoice] = useState(0);

@@ -32,3 +32,4 @@ a.disabled { opacity: 0.4; pointer-events: none; }
 .tip { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .tip select { flex: 1; min-width: 180px; }
 .tip button { flex: 0 0 auto; width: auto; }
+.map { height: 260px; width: 100%; border-radius: 8px; margin: 8px 0; }

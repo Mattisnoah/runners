@@ -11,6 +11,7 @@ export const MAX_TIPS = 3;
 export const REPORT_INTERVAL_MS = 5 * 60 * 1000;
 export const OUT_OF_ZONE_LIMIT_MS = 60 * 1000;
 export const NO_CALL_RADIUS_M = 10;
+export const HIDE_HEAD_START_MS = 5 * 60 * 1000; // seekers wait this long after the start
 
 // Round length presets: calls and facetimes allowed per seeker.
 export const ROUND_PRESETS = {
@@ -53,6 +54,7 @@ export function createRoom({ hostId, hostName, hostPhone, roundMinutes, tagMode,
     endsAt: null,
     outOfZoneSince: {},
     events: [],
+    tips: [],
   };
 }
 
@@ -80,7 +82,13 @@ export function startRound(room, actorId, now) {
   room.startedAt = now;
   room.endsAt = now + room.roundMinutes * 60 * 1000;
   room.nextReportAt = now + REPORT_INTERVAL_MS;
+  room.seekersFreeAt = now + HIDE_HEAD_START_MS;
   return room;
+}
+
+// Seekers may not act until the hiders' head start is over.
+function assertSeekerFree(room, now) {
+  if (room.seekersFreeAt != null && now < room.seekersFreeAt) throw new Error("seekers still hiding");
 }
 
 // Zone radius, growing by growPerStepM every stepMinutes when enabled.
@@ -121,6 +129,7 @@ export function tag(room, seekerId, runnerId, now) {
   const runner = room.players[runnerId];
   if (!seeker || !runner) throw new Error("unknown player");
   if (seeker.role !== "seeker" || runner.role !== "runner") throw new Error("invalid roles");
+  assertSeekerFree(room, now);
   if (room.tagMode === 0) throw new Error("manual mode: runner confirms tag");
   if (runner.status !== "ok") throw new Error("runner not active");
   if (!seeker.pos || !runner.pos) throw new Error("no location");
@@ -141,12 +150,13 @@ export function confirmTagged(room, runnerId, now) {
 }
 
 // Seeker calls or FaceTimes a runner. Blocked within NO_CALL_RADIUS_M.
-export function contact(room, seekerId, runnerId, kind) {
+export function contact(room, seekerId, runnerId, kind, now) {
   const seeker = room.players[seekerId];
   const runner = room.players[runnerId];
   if (!seeker || !runner || seeker.role !== "seeker" || runner.role !== "runner") throw new Error("invalid roles");
   if (runner.status !== "ok") throw new Error("runner not active");
   if (kind !== "call" && kind !== "facetime") throw new Error("invalid kind");
+  assertSeekerFree(room, now);
   const key = kind === "call" ? "calls" : "facetimes";
   const limit = kind === "call" ? room.limits.calls : room.limits.facetimes;
   if (seeker[key] >= limit) throw new Error(`no ${kind}s left`);
@@ -162,10 +172,27 @@ export function requestTip(room, seekerId, runnerId, tipIndex, now) {
   const seeker = room.players[seekerId];
   const runner = room.players[runnerId];
   if (!seeker || !runner || seeker.role !== "seeker" || runner.role !== "runner") throw new Error("invalid roles");
+  assertSeekerFree(room, now);
   if (seeker.tips >= MAX_TIPS) throw new Error("no tips left");
   if (!TIP_TYPES[tipIndex]) throw new Error("invalid tip");
   seeker.tips += 1;
+  room.tips.push({ id: room.tips.length + 1, seekerId, targetId: runnerId, tipIndex, askedAt: now, answer: null });
   logEvent(room, now, `${seeker.name} fragt ${runner.name}: ${TIP_TYPES[tipIndex]}`);
+  return room;
+}
+
+// The runner answers a tip request. Answers are stored on the request and shown to the seeker.
+export function answerTip(room, runnerId, tipId, answer, now) {
+  const runner = room.players[runnerId];
+  if (!runner || runner.role !== "runner") throw new Error("invalid runner");
+  const text = String(answer || "").trim().slice(0, 200);
+  if (!text) throw new Error("empty answer");
+  const tip = room.tips.find((t) => t.id === tipId && t.targetId === runnerId);
+  if (!tip) throw new Error("unknown tip");
+  if (tip.answer) throw new Error("already answered");
+  tip.answer = text;
+  tip.answeredAt = now;
+  logEvent(room, now, `${runner.name} antwortet auf: ${TIP_TYPES[tip.tipIndex]}`);
   return room;
 }
 

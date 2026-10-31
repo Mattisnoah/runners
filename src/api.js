@@ -20,4 +20,5 @@ export const api = {
   confirmTagged: (code, playerId) => call("POST", `/rooms/${code}/confirm-tagged`, { playerId }),
   contact: (code, playerId, targetId, kind) => call("POST", `/rooms/${code}/contact`, { playerId, targetId, kind }),
   tip: (code, playerId, targetId, tipIndex) => call("POST", `/rooms/${code}/tip`, { playerId, targetId, tipIndex }),
+  tipAnswer: (code, playerId, tipId, answer) => call("POST", `/rooms/${code}/tip-answer`, { playerId, tipId, answer }),
 };

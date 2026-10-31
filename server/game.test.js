@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRoom, addPlayer, setRole, startRound, reportLocation, tag, confirmTagged, contact, requestTip, checkEnd, zoneRadius, distanceM } from "./game.js";
+import { createRoom, addPlayer, setRole, startRound, reportLocation, tag, confirmTagged, contact, requestTip, answerTip, checkEnd, zoneRadius, distanceM, HIDE_HEAD_START_MS } from "./game.js";
+
+const T = HIDE_HEAD_START_MS + 1000; // a time after the hiders' head start
 
 const C = { lat: 52.52, lng: 13.405 };
 const at = (dLat) => ({ lat: C.lat + dLat, lng: C.lng }); // ~111 km per degree
@@ -27,9 +29,9 @@ test("tag only within range and only seeker -> runner", () => {
   startRound(room, "h", 0);
   reportLocation(room, "r", at(0.0001), 1000); // ~11 m
   reportLocation(room, "s", at(0), 1000);
-  assert.throws(() => tag(room, "s", "r", 1000), /too far/);
+  assert.throws(() => tag(room, "s", "r", T), /too far/);
   reportLocation(room, "s", at(0.00008), 1000); // ~2.2 m from runner
-  tag(room, "s", "r", 1000);
+  tag(room, "s", "r", T);
   assert.equal(room.players.r.status, "tagged");
 });
 
@@ -45,24 +47,45 @@ test("calls blocked within 10 m and limited by round length", () => {
   startRound(room, "h", 0);
   reportLocation(room, "r", at(0.00005), 1); // ~5.5 m
   reportLocation(room, "s", at(0), 1);
-  assert.throws(() => contact(room, "s", "r", "call"), /too close/);
+  assert.throws(() => contact(room, "s", "r", "call", T), /too close/);
   reportLocation(room, "s", at(0.001), 1); // ~111 m
-  contact(room, "s", "r", "call");
-  contact(room, "s", "r", "call");
-  contact(room, "s", "r", "call");
-  assert.throws(() => contact(room, "s", "r", "call"), /no calls left/);
-  contact(room, "s", "r", "facetime");
-  contact(room, "s", "r", "facetime");
-  assert.throws(() => contact(room, "s", "r", "facetime"), /no facetimes left/);
+  contact(room, "s", "r", "call", T);
+  contact(room, "s", "r", "call", T);
+  contact(room, "s", "r", "call", T);
+  assert.throws(() => contact(room, "s", "r", "call", T), /no calls left/);
+  contact(room, "s", "r", "facetime", T);
+  contact(room, "s", "r", "facetime", T);
+  assert.throws(() => contact(room, "s", "r", "facetime", T), /no facetimes left/);
 });
 
 test("max 3 tips", () => {
   const room = setup();
   startRound(room, "h", 0);
-  requestTip(room, "s", "r", 0, 1);
-  requestTip(room, "s", "r", 1, 2);
-  requestTip(room, "s", "r", 2, 3);
-  assert.throws(() => requestTip(room, "s", "r", 3, 4), /no tips/);
+  requestTip(room, "s", "r", 0, T + 1);
+  requestTip(room, "s", "r", 1, T + 2);
+  requestTip(room, "s", "r", 2, T + 3);
+  assert.throws(() => requestTip(room, "s", "r", 3, T + 4), /no tips/);
+});
+
+test("seekers cannot act during the 5 minute head start", () => {
+  const room = setup();
+  startRound(room, "h", 0);
+  assert.throws(() => requestTip(room, "s", "r", 0, HIDE_HEAD_START_MS - 1), /still hiding/);
+  assert.throws(() => contact(room, "s", "r", "call", HIDE_HEAD_START_MS - 1), /still hiding/);
+  assert.throws(() => tag(room, "s", "r", HIDE_HEAD_START_MS - 1), /still hiding/);
+  requestTip(room, "s", "r", 0, HIDE_HEAD_START_MS);
+  assert.equal(room.tips.length, 1);
+});
+
+test("runner answers a tip once, empty answers rejected", () => {
+  const room = setup();
+  startRound(room, "h", 0);
+  requestTip(room, "s", "r", 1, T);
+  const tipId = room.tips[0].id;
+  assert.throws(() => answerTip(room, "r", tipId, "   ", T + 1), /empty/);
+  answerTip(room, "r", tipId, "Hauptstrasse", T + 2);
+  assert.equal(room.tips[0].answer, "Hauptstrasse");
+  assert.throws(() => answerTip(room, "r", tipId, "nochmal", T + 3), /already/);
 });
 
 test("runner loses after more than 60 s outside zone, not before", () => {

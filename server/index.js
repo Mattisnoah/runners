@@ -91,11 +91,19 @@ export function handle(method, url, body, now = Date.now()) {
       return [200, { ok: true }];
     }
     if (method === "POST" && action === "contact") {
-      game.contact(room, body.playerId, body.targetId, body.kind);
+      game.contact(room, body.playerId, body.targetId, body.kind, now);
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "tip-answer") {
+      game.answerTip(room, body.playerId, body.tipId, body.answer, now);
       return [200, { ok: true }];
     }
     if (method === "POST" && action === "tip") {
       game.requestTip(room, body.playerId, body.targetId, body.tipIndex, now);
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "tip-answer") {
+      game.answerTip(room, body.playerId, body.tipId, body.answer, now);
       return [200, { ok: true }];
     }
     return [404, { error: "unknown action" }];
