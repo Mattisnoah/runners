@@ -1,0 +1,34 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  background: #111827;
+  color: #f9fafb;
+}
+body { margin: 0; }
+.wrap { max-width: 520px; margin: 0 auto; padding: 16px; padding-bottom: env(safe-area-inset-bottom); }
+h1 { font-size: 28px; }
+h2 { font-size: 20px; margin: 0 0 8px; }
+h3 { font-size: 16px; margin: 16px 0 4px; }
+input, select, button, a.btn {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid #374151;
+  background: #1f2937;
+  color: inherit;
+}
+label { display: block; margin-top: 10px; font-size: 14px; color: #9ca3af; }
+button { background: #2563eb; border: none; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: 0.4; cursor: default; }
+button.danger { background: #dc2626; }
+.card { background: #1f2937; border-radius: 14px; padding: 14px; margin: 12px 0; }
+.error { color: #fca5a5; }
+.hint { font-size: 13px; color: #9ca3af; }
+a { display: inline-block; margin: 4px 8px 4px 0; padding: 8px 10px; border-radius: 8px; background: #374151; color: inherit; text-decoration: none; }
+a.disabled { opacity: 0.4; pointer-events: none; }
+.tip { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tip select { flex: 1; min-width: 180px; }
+.tip button { flex: 0 0 auto; width: auto; }
