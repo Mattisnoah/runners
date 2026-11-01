@@ -27,7 +27,15 @@ export default function App() {
         const data = await api.getRoom(session.code, session.playerId);
         if (alive) setRoom(data.room);
       } catch (e) {
-        if (alive) setError(e.message);
+        if (!alive) return;
+        if (e.message === "room not found") {
+          // Stale session (server restarted or room gone): forget it and show the intro again.
+          localStorage.removeItem(SESSION_KEY);
+          setRoom(null);
+          setSession(null);
+          setStarted(false);
+        }
+        setError(e.message);
       }
     };
     tick();
@@ -219,19 +227,6 @@ function Lobby({ room, me, code, error, onError }) {
               </li>
             ))}
           </ul>
-          {isHost && (
-            <div>
-              <label>
-                Sucher
-                <input type="number" min="1" value={room.targetSeekers} onChange={(e) => run(() => api.setCounts(code, me, Number(e.target.value), room.targetRunners))} />
-              </label>
-              <label>
-                Verstecker
-                <input type="number" min="1" value={room.targetRunners} onChange={(e) => run(() => api.setCounts(code, me, room.targetSeekers, Number(e.target.value)))} />
-              </label>
-            </div>
-          )}
-          <p>Ziel: {room.targetSeekers} Sucher, {room.targetRunners} Verstecker</p>
           {isHost && <button onClick={() => run(() => api.start(code, me))}>Spiel starten</button>}
         </section>
       )}
@@ -241,6 +236,7 @@ function Lobby({ room, me, code, error, onError }) {
       {room.phase === "finished" && (
         <section className="card">
           <h2>Spiel vorbei</h2>
+          {isHost && <button onClick={() => run(() => api.reset(code, me))}>Noch eine Runde</button>}
           <ul>
             {room.events.map((ev, i) => (
               <li key={i}>{ev.text}</li>
@@ -297,12 +293,20 @@ function Game({ room, me, code, onError }) {
   const runners = Object.values(room.players).filter((p) => p.role === "runner");
   const seekers = Object.values(room.players).filter((p) => p.role === "seeker");
   const [pos, setPos] = useState(null);
+  const [acc, setAcc] = useState(null);
+  const [lastSent, setLastSent] = useState(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
   const headStartLeft = room.seekersFreeAt ? Math.max(0, room.seekersFreeAt - now) : 0;
+  const reportEvery = isSeeker ? 15000 : 5 * 60 * 1000;
+  const nextSendIn = lastSent ? Math.max(0, lastSent + reportEvery - now) : 0;
+  const stepMs = room.zone.stepMinutes * 60 * 1000;
+  const zoneGrows = room.zone.growPerStepM > 0 && room.startedAt != null;
+  const nextZoneIn = zoneGrows ? Math.max(0, room.startedAt + (Math.floor((now - room.startedAt) / stepMs) + 1) * stepMs - now) : 0;
+  const endIn = room.endsAt ? Math.max(0, room.endsAt - now) : 0;
   const fmt = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
   const mapPoints = Object.values(room.players)
     .filter((p) => p.pos && p.id !== me)
@@ -316,16 +320,17 @@ function Game({ room, me, code, onError }) {
     const send = (p) => {
       const next = { lat: p.coords.latitude, lng: p.coords.longitude };
       setPos(next);
+      setAcc(p.coords.accuracy);
+      setLastSent(Date.now());
       api.location(code, me, next).catch((e) => onError(e.message));
     };
     const fail = () => onError("Standort-Freigabe nötig");
     // Seekers follow live so distances update; runners only report every 5 minutes.
-    const watchId = isSeeker ? navigator.geolocation.watchPosition(send, fail, { enableHighAccuracy: true }) : null;
-    if (!isSeeker) navigator.geolocation.getCurrentPosition(send, fail, { enableHighAccuracy: true });
+    const watchId = navigator.geolocation.watchPosition(send, fail, { enableHighAccuracy: true, maximumAge: 0 });
     const every = isSeeker ? 15000 : 5 * 60 * 1000;
-    const id = setInterval(() => navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true }), every);
+    const id = setInterval(() => navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true, maximumAge: 0 }), every);
     return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      navigator.geolocation.clearWatch(watchId);
       clearInterval(id);
     };
   }, [code, me, isSeeker]);
@@ -353,8 +358,13 @@ function Game({ room, me, code, onError }) {
       <h2>{isSeeker ? "Sucher" : "Verstecker"} – {mine.name}</h2>
       <p>Status: {mine.status === "ok" ? "aktiv" : mine.status === "lost" ? "verloren" : "getickt"}</p>
       {isSeeker && headStartLeft > 0 && <p className="hint">Vorsprung der Verstecker: noch {fmt(headStartLeft)}</p>}
+      <div className="timers">
+        <div><span>Nächster Standort</span><strong>{fmt(nextSendIn)}</strong></div>
+        <div><span>Nächste Zone</span><strong>{zoneGrows ? fmt(nextZoneIn) : "fest"}</strong></div>
+        <div><span>Rundenende</span><strong>{fmt(endIn)}</strong></div>
+      </div>
       <MapView center={room.zone.center} radiusM={currentRadius(room, now)} points={mapPoints} />
-      <p className="hint">Karte zeigt den letzten gemeldeten Standort.</p>
+      <p className="hint">Karte zeigt den letzten gemeldeten Standort{acc !== null && ` (Genauigkeit ca. ${Math.round(acc)} m)`}.</p>
 
       {!isSeeker && mine.status === "ok" && (
         <TipAnswers room={room} me={me} code={code} act={act} />

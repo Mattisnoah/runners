@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRoom, addPlayer, setRole, setCounts, startRound, reportLocation, tag, confirmTagged, contact, requestTip, answerTip, checkEnd, zoneRadius, distanceM, HIDE_HEAD_START_MS } from "./game.js";
+import { createRoom, addPlayer, setRole, startRound, resetRound, reportLocation, tag, confirmTagged, contact, requestTip, answerTip, checkEnd, zoneRadius, distanceM, HIDE_HEAD_START_MS } from "./game.js";
 
 const T = HIDE_HEAD_START_MS + 1000; // a time after the hiders' head start
 
@@ -12,7 +12,6 @@ function setup(opts = {}) {
   addPlayer(room, { id: "r", name: "Runner" });
   addPlayer(room, { id: "s", name: "Seeker" });
   setRole(room, "r", "runner", "h");
-  setCounts(room, "h", 2, 1);
   return room;
 }
 
@@ -36,13 +35,22 @@ test("tag only within range and only seeker -> runner", () => {
   assert.equal(room.players.r.status, "tagged");
 });
 
-test("start is refused until the chosen seeker and runner counts match", () => {
-  const room = setup();
-  setCounts(room, "h", 1, 1);
-  assert.throws(() => startRound(room, "h", 0), /need 1 seekers and 1 runners/);
-  setCounts(room, "h", 2, 1);
+test("host may be a runner and the round can be reset", () => {
+  const room = createRoom({ hostId: "h", hostName: "H", roundMinutes: 30, tagMode: 0, zone: { center: C, radiusM: 100 } });
+  setRole(room, "h", "runner", "h");
+  addPlayer(room, { id: "s", name: "S" });
   startRound(room, "h", 0);
-  assert.equal(room.phase, "running");
+  assert.throws(() => resetRound(room, "h"), /not finished/);
+  room.phase = "finished";
+  resetRound(room, "h");
+  assert.equal(room.phase, "lobby");
+});
+
+test("start is refused without a seeker", () => {
+  const room = setup();
+  room.players.s.role = "runner";
+  room.players.h.role = "runner";
+  assert.throws(() => startRound(room, "h", 0), /seeker/);
 });
 
 test("runner can confirm being tagged manually", () => {

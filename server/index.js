@@ -87,8 +87,8 @@ export function handle(method, url, body, now = Date.now()) {
       game.startRound(room, body.playerId, now);
       return [200, { ok: true }];
     }
-    if (method === "POST" && action === "counts") {
-      game.setCounts(room, body.playerId, body.seekers, body.runners);
+    if (method === "POST" && action === "reset") {
+      game.resetRound(room, body.playerId);
       return [200, { ok: true }];
     }
     if (method === "POST" && action === "role") {
