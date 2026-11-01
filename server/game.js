@@ -50,6 +50,8 @@ export function createRoom({ hostId, hostName, hostPhone, roundMinutes, tagMode,
     players: {
       [hostId]: { id: hostId, name: hostName, phone: hostPhone || "", role: "seeker", status: "ok", tips: 0, calls: 0, facetimes: 0 },
     },
+    targetSeekers: 1, // host-chosen head count, checked at start
+    targetRunners: 1,
     startedAt: null,
     endsAt: null,
     outOfZoneSince: {},
@@ -73,11 +75,25 @@ export function setRole(room, playerId, role, actorId) {
   return room;
 }
 
+export function setCounts(room, actorId, seekers, runners) {
+  if (actorId !== room.hostId) throw new Error("only host");
+  if (room.phase !== "lobby") throw new Error("game already started");
+  if (!Number.isInteger(seekers) || seekers < 1) throw new Error("need at least one seeker");
+  if (!Number.isInteger(runners) || runners < 1) throw new Error("need at least one runner");
+  room.targetSeekers = seekers;
+  room.targetRunners = runners;
+  return room;
+}
+
 export function startRound(room, actorId, now) {
   if (actorId !== room.hostId) throw new Error("only host");
   if (room.phase !== "lobby") throw new Error("already started");
   const runners = Object.values(room.players).filter((p) => p.role === "runner");
+  const seekers = Object.values(room.players).filter((p) => p.role === "seeker");
   if (runners.length === 0) throw new Error("need at least one runner");
+  if (runners.length !== room.targetRunners || seekers.length !== room.targetSeekers) {
+    throw new Error(`need ${room.targetSeekers} seekers and ${room.targetRunners} runners`);
+  }
   room.phase = "running";
   room.startedAt = now;
   room.endsAt = now + room.roundMinutes * 60 * 1000;

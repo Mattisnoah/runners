@@ -17,13 +17,14 @@ export default function App() {
   const [session, setSession] = useState(loadSession);
   const [room, setRoom] = useState(null);
   const [error, setError] = useState("");
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     if (!session) return;
     let alive = true;
     const tick = async () => {
       try {
-        const data = await api.getRoom(session.code);
+        const data = await api.getRoom(session.code, session.playerId);
         if (alive) setRoom(data.room);
       } catch (e) {
         if (alive) setError(e.message);
@@ -45,6 +46,7 @@ export default function App() {
   };
 
   if (!session || !room) {
+    if (!started && !session) return <Intro onStart={() => setStarted(true)} />;
     return (
       <Start
         error={error}
@@ -62,6 +64,33 @@ export default function App() {
       onError={setError}
       error={error}
     />
+  );
+}
+
+function Intro({ onStart }) {
+  return (
+    <main className="intro">
+      <div className="intro-hero">
+        <p className="intro-kicker">Ein Versteckspiel mit Karte</p>
+        <h1>Runners</h1>
+        <p className="intro-lead">Die Verstecker laufen los, die Sucher bekommen einen Vorsprung und jagen sie durch die Stadt.</p>
+        <button className="intro-start" onClick={onStart}>Starten</button>
+      </div>
+
+      <section className="intro-how">
+        <h2>So funktioniert das Spiel</h2>
+        <ol>
+          <li><strong>Raum anlegen.</strong> Ein Sucher erstellt einen Raum, legt Zone, Rundenlänge und Tipp-Regeln fest und teilt den Code.</li>
+          <li><strong>Beitreten.</strong> Die Verstecker geben den Code ein. Eine Telefonnummer ist für Anrufe nötig.</li>
+          <li><strong>Rollen festlegen.</strong> Der Host bestimmt, wie viele Sucher und Verstecker es gibt, und startet das Spiel.</li>
+          <li><strong>Vorsprung.</strong> Die Verstecker haben fünf Minuten Vorsprung. In dieser Zeit können die Sucher nichts tun.</li>
+          <li><strong>Suchen.</strong> Die Sucher sehen die Standorte der Verstecker auf der Karte und können sie anrufen, per FaceTime anfragen oder Tipps schicken.</li>
+          <li><strong>Antworten.</strong> Verstecker beantworten die Tipp-Fragen. Die Sucher sehen die Antworten.</li>
+          <li><strong>Ticken.</strong> Ein Sucher, der in Reichweite ist, ticked einen Verstecker. Wer getickt wird, scheidet aus.</li>
+          <li><strong>Zone.</strong> Die Zone zeigt den Spielbereich auf der Karte. Sie kann mit der Zeit wachsen.</li>
+        </ol>
+      </section>
+    </main>
   );
 }
 
@@ -190,6 +219,19 @@ function Lobby({ room, me, code, error, onError }) {
               </li>
             ))}
           </ul>
+          {isHost && (
+            <div>
+              <label>
+                Sucher
+                <input type="number" min="1" value={room.targetSeekers} onChange={(e) => run(() => api.setCounts(code, me, Number(e.target.value), room.targetRunners))} />
+              </label>
+              <label>
+                Verstecker
+                <input type="number" min="1" value={room.targetRunners} onChange={(e) => run(() => api.setCounts(code, me, room.targetSeekers, Number(e.target.value)))} />
+              </label>
+            </div>
+          )}
+          <p>Ziel: {room.targetSeekers} Sucher, {room.targetRunners} Verstecker</p>
           {isHost && <button onClick={() => run(() => api.start(code, me))}>Spiel starten</button>}
         </section>
       )}

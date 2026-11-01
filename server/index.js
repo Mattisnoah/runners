@@ -29,12 +29,25 @@ function readBody(req) {
   });
 }
 
-function publicRoom(room) {
-  return { ...room, outOfZoneSince: undefined };
+// Hiders must not see where the seekers are, so their positions are stripped for runner viewers.
+function publicRoom(room, viewerId) {
+  const viewer = room.players[viewerId];
+  const hideSeekerPos = viewer?.role === "runner";
+  const players = Object.fromEntries(
+    Object.entries(room.players).map(([id, p]) => {
+      if (hideSeekerPos && p.role === "seeker") {
+        const { pos, ...rest } = p;
+        return [id, rest];
+      }
+      return [id, p];
+    })
+  );
+  return { ...room, players, outOfZoneSince: undefined };
 }
 
 export function handle(method, url, body, now = Date.now()) {
-  const parts = url.split("?")[0].split("/").filter(Boolean);
+  const parsed = new URL(url, "http://localhost");
+  const parts = parsed.pathname.split("/").filter(Boolean);
   if (parts[0] !== "api") return [404, { error: "not found" }];
   if (method === "GET" && parts.length === 2 && parts[1] === "health") return [200, { ok: true }];
 
@@ -63,7 +76,7 @@ export function handle(method, url, body, now = Date.now()) {
   try {
     if (method === "GET" && !action) {
       game.checkEnd(room, now);
-      return [200, { room: publicRoom(room), now }];
+      return [200, { room: publicRoom(room, parsed.searchParams.get("playerId")), now }];
     }
     if (method === "POST" && action === "join") {
       const playerId = randomUUID();
@@ -72,6 +85,10 @@ export function handle(method, url, body, now = Date.now()) {
     }
     if (method === "POST" && action === "start") {
       game.startRound(room, body.playerId, now);
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "counts") {
+      game.setCounts(room, body.playerId, body.seekers, body.runners);
       return [200, { ok: true }];
     }
     if (method === "POST" && action === "role") {
@@ -92,10 +109,6 @@ export function handle(method, url, body, now = Date.now()) {
     }
     if (method === "POST" && action === "contact") {
       game.contact(room, body.playerId, body.targetId, body.kind, now);
-      return [200, { ok: true }];
-    }
-    if (method === "POST" && action === "tip-answer") {
-      game.answerTip(room, body.playerId, body.tipId, body.answer, now);
       return [200, { ok: true }];
     }
     if (method === "POST" && action === "tip") {

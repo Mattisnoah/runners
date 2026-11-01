@@ -5,6 +5,24 @@ import { handle } from "./index.js";
 const C = { lat: 52.52, lng: 13.405 };
 const T0 = 1_000_000;
 
+test("runner view hides seeker positions, seeker view keeps them", () => {
+  const [, create] = handle("POST", "/api/rooms", { name: "Anna", roundMinutes: 30, tagMode: 5, zone: { center: C, radiusM: 300 } }, T0);
+  const code = create.code;
+  const host = create.playerId;
+  const [, join] = handle("POST", `/api/rooms/${code}/join`, { name: "Ben" }, T0);
+  const runner = join.playerId;
+  handle("POST", `/api/rooms/${code}/role`, { playerId: host, targetId: runner, role: "runner" }, T0);
+  handle("POST", `/api/rooms/${code}/location`, { playerId: host, lat: C.lat, lng: C.lng }, T0);
+  handle("POST", `/api/rooms/${code}/location`, { playerId: runner, lat: C.lat, lng: C.lng }, T0);
+
+  const [, asRunner] = handle("GET", `/api/rooms/${code}?playerId=${runner}`, undefined, T0);
+  assert.equal(asRunner.room.players[host].pos, undefined);
+  assert.ok(asRunner.room.players[runner].pos);
+
+  const [, asHost] = handle("GET", `/api/rooms/${code}?playerId=${host}`, undefined, T0);
+  assert.ok(asHost.room.players[runner].pos);
+});
+
 test("full round over the API", () => {
   const [s1, create] = handle("POST", "/api/rooms", { name: "Anna", roundMinutes: 30, tagMode: 5, zone: { center: C, radiusM: 300 } }, T0);
   assert.equal(s1, 201);

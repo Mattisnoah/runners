@@ -11,7 +11,8 @@ async function call(method, path, body) {
 
 export const api = {
   createRoom: (body) => call("POST", "/rooms", body),
-  getRoom: (code) => call("GET", `/rooms/${code}`),
+  getRoom: (code, playerId) => call("GET", `/rooms/${code}?playerId=${encodeURIComponent(playerId || "")}`),
+  setCounts: (code, playerId, seekers, runners) => call("POST", `/rooms/${code}/counts`, { playerId, seekers, runners }),
   join: (code, name, phone) => call("POST", `/rooms/${code}/join`, { name, phone }),
   start: (code, playerId) => call("POST", `/rooms/${code}/start`, { playerId }),
   setRole: (code, playerId, targetId, role) => call("POST", `/rooms/${code}/role`, { playerId, targetId, role }),

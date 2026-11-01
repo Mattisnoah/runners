@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRoom, addPlayer, setRole, startRound, reportLocation, tag, confirmTagged, contact, requestTip, answerTip, checkEnd, zoneRadius, distanceM, HIDE_HEAD_START_MS } from "./game.js";
+import { createRoom, addPlayer, setRole, setCounts, startRound, reportLocation, tag, confirmTagged, contact, requestTip, answerTip, checkEnd, zoneRadius, distanceM, HIDE_HEAD_START_MS } from "./game.js";
 
 const T = HIDE_HEAD_START_MS + 1000; // a time after the hiders' head start
 
@@ -12,6 +12,7 @@ function setup(opts = {}) {
   addPlayer(room, { id: "r", name: "Runner" });
   addPlayer(room, { id: "s", name: "Seeker" });
   setRole(room, "r", "runner", "h");
+  setCounts(room, "h", 2, 1);
   return room;
 }
 
@@ -33,6 +34,15 @@ test("tag only within range and only seeker -> runner", () => {
   reportLocation(room, "s", at(0.00008), 1000); // ~2.2 m from runner
   tag(room, "s", "r", T);
   assert.equal(room.players.r.status, "tagged");
+});
+
+test("start is refused until the chosen seeker and runner counts match", () => {
+  const room = setup();
+  setCounts(room, "h", 1, 1);
+  assert.throws(() => startRound(room, "h", 0), /need 1 seekers and 1 runners/);
+  setCounts(room, "h", 2, 1);
+  startRound(room, "h", 0);
+  assert.equal(room.phase, "running");
 });
 
 test("runner can confirm being tagged manually", () => {
