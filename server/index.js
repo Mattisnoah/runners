@@ -58,9 +58,13 @@ export function handle(method, url, body, now = Date.now()) {
         hostId: playerId,
         hostName: body.name || "Host",
         hostPhone: body.phone,
+        hostRole: body.hostRole,
         roundMinutes: body.roundMinutes,
-        tagMode: body.tagMode,
         zone: body.zone,
+        pingIntervalMin: body.pingIntervalMin,
+        vehicles: body.vehicles,
+        tagging: body.tagging,
+        advancedTips: body.advancedTips,
       });
       rooms.set(room.code, room);
       return [201, { code: room.code, playerId }];
@@ -95,8 +99,29 @@ export function handle(method, url, body, now = Date.now()) {
       game.setRole(room, body.targetId, body.role, body.playerId);
       return [200, { ok: true }];
     }
+    if (method === "POST" && action === "randomize") {
+      game.randomizeRoles(room, body.playerId);
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "kick") {
+      game.kickPlayer(room, body.playerId, body.targetId);
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "leave") {
+      const empty = game.leaveRoom(room, body.playerId);
+      if (empty) rooms.delete(room.code);
+      return [200, { ok: true }];
+    }
     if (method === "POST" && action === "location") {
-      game.reportLocation(room, body.playerId, body, now);
+      game.reportLocation(room, body.playerId, body, now, { forced: Boolean(body.forced) });
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "vehicle") {
+      game.setVehicle(room, body.playerId, body.vehicle, now);
+      return [200, { ok: true }];
+    }
+    if (method === "POST" && action === "location-ping") {
+      game.requestLocationPing(room, body.playerId, now);
       return [200, { ok: true }];
     }
     if (method === "POST" && action === "tag") {

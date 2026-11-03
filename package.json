@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node server/index.js",
-    "test": "node --test server/game.test.js"
+    "test": "node --test server/game.test.js server/api.test.js"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

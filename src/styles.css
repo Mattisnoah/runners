@@ -4,8 +4,8 @@
   background: #111827;
   color: #f9fafb;
 }
-body { margin: 0; }
-.wrap { max-width: 520px; margin: 0 auto; padding: 16px; padding-bottom: env(safe-area-inset-bottom); }
+body { margin: 0; padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+.wrap { max-width: 520px; margin: 0 auto; padding: 16px; padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 h1 { font-size: 28px; }
 h2 { font-size: 20px; margin: 0 0 8px; }
 h3 { font-size: 16px; margin: 16px 0 4px; }
@@ -49,3 +49,28 @@ a.disabled { opacity: 0.4; pointer-events: none; }
 .timers div { background: #111827; border-radius: 10px; padding: 8px; text-align: center; }
 .timers span { display: block; font-size: 12px; color: #9ca3af; }
 .timers strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.game-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.game-head h1 { margin: 0; }
+.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(17, 24, 39, 0.94); border-top: 1px solid #374151; backdrop-filter: blur(8px); z-index: 900; }
+.bottom-bar .danger { max-width: 520px; margin: 0 auto; display: block; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.row button, .row a { width: auto; flex: 0 0 auto; margin: 0; }
+.chip { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #374151; font-size: 12px; font-weight: 600; color: #e5e7eb; }
+.chip.seeker { background: #1e3a8a; }
+.chip.runner { background: #14532d; }
+.chip.tagged { background: #78350f; }
+.chip.lost { background: #3f3f46; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip-btn { width: auto; flex: 0 0 auto; margin: 0; padding: 8px 12px; border-radius: 999px; background: #374151; font-size: 13px; }
+.chip-btn.active { background: #2563eb; }
+.players { list-style: none; padding: 0; margin: 0; }
+.players > li { padding: 10px 0; border-bottom: 1px solid #374151; }
+.players > li:last-child { border-bottom: none; }
+.player-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.facts { list-style: none; padding: 0; margin: 0 0 8px; color: #d1d5db; font-size: 14px; line-height: 1.8; }
+.events { list-style: none; padding: 0; margin: 0; color: #9ca3af; font-size: 13px; line-height: 1.6; }
+.inner { margin-top: 8px; }
+button.ghost { background: #374151; }
+input[type="checkbox"] { width: auto; margin: 0; padding: 0; accent-color: #2563eb; }
+label.check { display: flex; align-items: center; gap: 10px; color: #d1d5db; margin-top: 14px; font-size: 14px; }
+.player-row .chip { margin-left: 0; }
